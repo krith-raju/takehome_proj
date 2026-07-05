@@ -117,6 +117,8 @@ GENERIC_TITLE_RE = re.compile(
 
 @dataclass(frozen=True)
 class UnitContext:
+    """A unit label found near a group of numbers."""
+
     category: str
     scale: str
     multiplier: Decimal
@@ -126,6 +128,8 @@ class UnitContext:
 
 @dataclass(frozen=True)
 class NumericCandidate:
+    """One parsed number plus the evidence needed to audit it."""
+
     page: int
     line_number: int
     token: str
@@ -138,6 +142,7 @@ class NumericCandidate:
     verification_path: Optional[str]
 
     def to_jsonable(self) -> dict:
+        """Convert Decimal values to strings for stable JSON output."""
         data = asdict(self)
         data["raw_value"] = str(self.raw_value)
         data["adjusted_value"] = str(self.adjusted_value)
@@ -145,11 +150,13 @@ class NumericCandidate:
 
 
 def normalize_scale(scale: str) -> str:
+    """Normalize plural and letter scale names to one canonical word."""
     clean = scale.lower().strip().rstrip("s")
     return LETTER_SCALES.get(clean, clean)
 
 
 def normalize_category(category: Optional[str]) -> str:
+    """Normalize unit categories such as dollars, hours, or '$'."""
     if not category:
         return "dollars"
     clean = category.lower().strip().rstrip("s")
@@ -236,11 +243,13 @@ def parse_decimal_token(token: str, line: str = "") -> Optional[Decimal]:
 
 
 def is_unmatched_parenthetical_fragment(token: str) -> bool:
+    """Ignore OCR/PDF artifacts that look like a dangling parenthesis."""
     stripped = token.strip()
     return stripped.endswith(")") and not stripped.startswith("(") and "$" not in stripped
 
 
 def format_decimal(value: Decimal) -> str:
+    """Format Decimal values with commas for human-readable output."""
     normalized = value.normalize()
     if normalized == normalized.to_integral():
         return f"{int(normalized):,}"
@@ -252,15 +261,18 @@ def format_decimal(value: Decimal) -> str:
 
 
 def overlaps(span: Tuple[int, int], spans: Iterable[Tuple[int, int]]) -> bool:
+    """Return whether one regex span overlaps any known span."""
     start, end = span
     return any(start < other_end and end > other_start for other_start, other_end in spans)
 
 
 def number_matches(line: str) -> List[re.Match[str]]:
+    """Return every numeric regex match on a line."""
     return [match for match in NUMBER_RE.finditer(line)]
 
 
 def clean_label(label: str) -> str:
+    """Normalize row, title, and column labels extracted from PDF text."""
     label = re.sub(r"\s+", " ", label).strip(" :-")
     if not label:
         return ""
@@ -272,6 +284,7 @@ def clean_label(label: str) -> str:
 
 
 def row_label(line: str) -> Optional[str]:
+    """Use text before the first number as a best-effort row label."""
     matches = number_matches(line)
     if not matches:
         return None
@@ -280,14 +293,13 @@ def row_label(line: str) -> Optional[str]:
 
 
 def is_title_like(line: str) -> bool:
+    """Identify likely nearby titles while avoiding sentences and headers."""
     stripped = line.strip()
     if not stripped or find_unit_contexts(stripped):
         return False
     if stripped.endswith("."):
         return False
     if len(stripped) > 90:
-        return False
-    if len(stripped) > 50 and stripped.endswith("."):
         return False
     if NUMBER_RE.search(stripped):
         return False
@@ -299,6 +311,7 @@ def is_title_like(line: str) -> bool:
 
 
 def find_title(lines: Sequence[str], line_number: int, classification: str) -> Optional[str]:
+    """Find the closest useful table, chart, or section title for a line."""
     if classification == "scale_label":
         for line in lines:
             if re.search(r"\bchart\b", line, re.IGNORECASE):
@@ -320,6 +333,7 @@ def find_title(lines: Sequence[str], line_number: int, classification: str) -> O
 
 
 def column_labels_from_header(line: str) -> List[str]:
+    """Extract reusable column labels from common budget table headers."""
     fy_labels = [match.group(0).upper().replace("  ", " ") for match in FY_LABEL_RE.finditer(line)]
     if len(fy_labels) >= 2:
         return fy_labels
@@ -335,6 +349,7 @@ def column_labels_from_header(line: str) -> List[str]:
 
 
 def find_column_label(lines: Sequence[str], line_number: int, value_index: int) -> Optional[str]:
+    """Match a value position to the nearest previous header label."""
     for header in reversed(lines[max(0, line_number - 8) : line_number]):
         labels = column_labels_from_header(header)
         if len(labels) > value_index:
@@ -376,6 +391,7 @@ def build_verification_path(
 
 
 def is_explicit_full_currency(token: str, raw_value: Decimal) -> bool:
+    """Detect values like '$6,000,000' that should not be scaled again."""
     clean = token.strip()
     if "$" not in clean or "." in clean:
         return False
@@ -383,6 +399,7 @@ def is_explicit_full_currency(token: str, raw_value: Decimal) -> bool:
 
 
 def is_identifier_like(token: str, line: str) -> bool:
+    """Filter years, fund codes, and program IDs from value scaling."""
     clean = token.strip().strip("()")
     no_punct = clean.replace("$", "").replace(",", "").replace(".", "")
     if not no_punct.isdigit():
@@ -398,10 +415,12 @@ def is_identifier_like(token: str, line: str) -> bool:
 
 
 def is_table_header(line: str) -> bool:
+    """Detect header-only lines whose numbers are labels, not values."""
     return bool(TABLE_HEADER_RE.search(line)) and not FINANCIAL_CONTEXT_RE.search(line)
 
 
 def is_bare_scale_label(line: str, token: str, raw_value: Decimal, unit: Optional[UnitContext]) -> bool:
+    """Detect chart axis tick labels such as '20,000.0' under '$ Millions'."""
     return (
         unit is not None
         and line.strip() == token.strip()
@@ -556,6 +575,7 @@ def extract_line_candidates(
 
 
 def ensure_ocr_available() -> None:
+    """Fail early with a useful message when OCR dependencies are unavailable."""
     if pytesseract is None:
         raise RuntimeError("OCR is needed for image-only pages; install dependencies with `pip install -r requirements.txt`.")
     if pdfium is None:
@@ -600,6 +620,7 @@ def extract_candidates(pdf_path: Path) -> List[NumericCandidate]:
 
 
 def best_candidates(candidates: Sequence[NumericCandidate]) -> Tuple[NumericCandidate, NumericCandidate]:
+    """Return the max raw candidate and max adjusted candidate."""
     if not candidates:
         raise ValueError("No numeric candidates were found.")
     raw = max(candidates, key=lambda item: item.raw_value)
@@ -608,6 +629,7 @@ def best_candidates(candidates: Sequence[NumericCandidate]) -> Tuple[NumericCand
 
 
 def print_candidate(title: str, candidate: NumericCandidate) -> None:
+    """Print one winning candidate and its evidence fields."""
     print(title)
     print(f"  value: {format_decimal(candidate.adjusted_value if title.endswith('adjusted') else candidate.raw_value)}")
     if title.endswith("adjusted"):
@@ -624,6 +646,7 @@ def print_candidate(title: str, candidate: NumericCandidate) -> None:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the command-line interface."""
     parser = argparse.ArgumentParser(description="Find the largest raw and unit-adjusted number in a PDF.")
     parser.add_argument("pdf", type=Path, help="Path to the PDF to scan.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of human-readable output.")
@@ -631,6 +654,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the CLI and return a shell-friendly exit code."""
     args = build_arg_parser().parse_args(argv)
     if not args.pdf.exists():
         print(f"PDF not found: {args.pdf}", file=sys.stderr)
