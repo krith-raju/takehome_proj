@@ -30,7 +30,7 @@ The virtual environment is created inside `takehome_proj` as `.venv/`. It is ign
 
 ## Run
 
-Put the PDF you want to scan in the repo directory, or pass an absolute/relative path to it:
+Place the PDF you want to scan in the repo directory, or pass an absolute/relative path to it:
 
 ```bash
 python largest_number.py INSERT_PDF_HERE.pdf
