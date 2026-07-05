@@ -5,24 +5,22 @@ This is a local Python solution for the ConductorAI take-home. Given a PDF, it r
 1. The largest raw number printed in the document, regardless of unit.
 2. The largest adjusted number after applying natural language unit guidance from the document.
 
-For example, if a table says values are listed in millions, the raw value `3.15` is treated as `3,150,000` for the adjusted result.
+The solution is self-contained.
 
-The solution is self-contained and does not call external APIs.
-
-Negative values, including parenthesized values like `(46.6)`, are compared as signed numbers. The program looks for the greatest value, not the greatest absolute magnitude.
+Assumption: Negative values, including parenthesized values like `(46.6)`, are compared as signed numbers. The program looks for the greatest value, not the greatest absolute magnitude.
 
 ## Setup From a Fresh Clone
 
 ```bash
 git clone https://github.com/krith-raju/takehome_proj.git
-cd takehome_proj
 brew install tesseract
+cd takehome_proj
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The virtual environment is created inside the repo directory as `.venv/`. It is ignored by git.
+The virtual environment is created inside `takehome_proj` as `.venv/`. It is ignored by git.
 
 `requirements.txt` installs:
 
@@ -126,4 +124,4 @@ The scanner is linear by page. It reads one page at a time, extracts candidates 
 
 ## Next Steps
 
-The main production improvement would be optional OCR for pages that contain both embedded text and screenshot tables. That would require deduplication so the same visible number is not counted twice from both the text layer and OCR.
+The main production improvement would be optional OCR for pages that contain both embedded text and screenshot tables. That would require deduplication so the same visible number is not counted twice from both the text layer and OCR. Along with that, integrating this within a agentic workflow in which this would be used as a document parser to extract relevant values. 
